@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Aggregator Dashboard</title>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+        body {
+            box-sizing: border-box;
+        }
+        .email-item:hover {
+            transform: translateY(-1px);
+            transition: all 0.2s ease;
+        }
+        .category-badge {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+        .ai-suggestion {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .notification-toast {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full bg-gray-50">
+  <div id="app" class="h-full flex flex-col"><!-- Header -->
+   <header class="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+    <div class="flex items-center justify-between">
+     <div class="flex items-center space-x-4">
+      <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+       <svg class="w-5 h-5 text-white" fill="currentColor" viewbox="0 0 20 20"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /> <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+       </svg>
+      </div>
+      <h1 id="app-title" class="text-xl font-semibold text-gray-900">Email Aggregator Dashboard</h1>
+     </div>
+     <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-2">
+       <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div><span class="text-sm text-gray-600">Real-time sync active</span>
+      </div><button id="sync-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"> Sync Now </button>
+     </div>
+    </div>
+   </header>
+   <div class="flex-1 flex"><!-- Sidebar -->
+    <aside class="w-64 bg-white shadow-sm border-r border-gray-200">
+     <div class="p-4">
+      <h2 class="text-sm font-medium text-gray-900 mb-3">Email Accounts</h2>
+      <div id="accounts-list" class="space-y-2 mb-6"><!-- Account filters will be populated here -->
+      </div>
+      <h2 class="text-sm font-medium text-gray-900 mb-3">Categories</h2>
+      <div id="categories-list" class="space-y-2 mb-6"><!-- Category filters will be populated here -->
+      </div>
+      <h2 class="text-sm font-medium text-gray-900 mb-3">Folders</h2>
+      <div id="folders-list" class="space-y-2"><!-- Folder filters will be populated here -->
+      </div>
+     </div>
+    </aside><!-- Main Content -->
+    <main class="flex-1 flex flex-col"><!-- Search Bar -->
+     <div class="bg-white border-b border-gray-200 px-6 py-4">
+      <div class="flex items-center space-x-4">
+       <div class="flex-1 relative"><input type="text" id="search-input" placeholder="Search emails with Elasticsearch..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        <svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+       </div><button id="add-sample-btn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"> Add Sample Email </button>
+      </div>
+     </div><!-- Email List -->
+     <div class="flex-1 overflow-auto">
+      <div id="emails-container" class="p-6">
+       <div id="loading-state" class="text-center py-12">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p class="text-gray-600">Loading emails...</p>
+       </div>
+       <div id="empty-state" class="text-center py-12 hidden">
+        <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+        <p class="text-gray-600 mb-4">No emails found</p><button id="add-first-email-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"> Add Sample Email </button>
+       </div>
+       <div id="emails-list" class="space-y-4"><!-- Emails will be populated here -->
+       </div>
+      </div>
+     </div>
+    </main>
+   </div><!-- Email Detail Modal -->
+   <div id="email-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+     <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+      <div class="flex items-center justify-between p-6 border-b border-gray-200">
+       <h3 id="modal-subject" class="text-lg font-semibold text-gray-900"></h3><button id="close-modal" class="text-gray-400 hover:text-gray-600">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg></button>
+      </div>
+      <div class="p-6 overflow-auto max-h-96">
+       <div class="mb-4">
+        <div class="flex items-center justify-between mb-2"><span class="text-sm text-gray-600">From:</span> <span id="modal-sender" class="text-sm font-medium"></span>
+        </div>
+        <div class="flex items-center justify-between mb-2"><span class="text-sm text-gray-600">Account:</span> <span id="modal-account" class="text-sm"></span>
+        </div>
+        <div class="flex items-center justify-between mb-4"><span class="text-sm text-gray-600">Category:</span> <span id="modal-category" class="text-sm px-2 py-1 rounded-full"></span>
+        </div>
+       </div>
+       <div class="prose max-w-none">
+        <div id="modal-body" class="text-gray-700"></div>
+       </div>
+      </div>
+      <div id="ai-suggestions" class="border-t border-gray-200 p-6 bg-gray-50">
+       <h4 class="text-sm font-medium text-gray-900 mb-3">AI-Powered Reply Suggestions</h4>
+       <div id="suggestions-container"><!-- AI suggestions will be populated here -->
+       </div>
+      </div>
+     </div>
+    </div>
+   </div><!-- Notification Toast -->
+   <div id="notification-toast" class="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg hidden notification-toast">
+    <div class="flex items-center space-x-2">
+     <svg class="w-5 h-5" fill="currentColor" viewbox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+     </svg><span id="toast-message">Notification sent to Slack!</span>
+    </div>
+   </div>
+  </div>
+  <script>
+        // Configuration and state
+        let emails = [];
+        let filteredEmails = [];
+        let activeFilters = {
+            account: 'all',
+            category: 'all',
+            folder: 'all',
+            search: ''
+        };
+
+        const defaultConfig = {
+            app_title: "Email Aggregator Dashboard",
+            company_name: "Your Company",
+            meeting_link: "https://cal.com/example"
+        };
+
+        // Sample email data for demonstration
+        const sampleEmails = [
+            {
+                id: "1",
+                subject: "Re: Job Application - Frontend Developer Position",
+                sender: "hr@techcorp.com",
+                account: "work@company.com",
+                folder: "INBOX",
+                category: "Interested",
+                timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+                body: "Hi there! Thank you for your application. We're impressed with your portfolio and would like to schedule a technical interview. When would be a good time for you this week?",
+                read: false
+            },
+            {
+                id: "2",
+                subject: "Meeting Request - Project Discussion",
+                sender: "client@startup.io",
+                account: "business@company.com",
+                folder: "INBOX",
+                category: "Meeting Booked",
+                timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+                body: "Hello! I've reviewed your proposal and I'm ready to move forward. I've booked a meeting for tomorrow at 2 PM to discuss the project details.",
+                read: true
+            },
+            {
+                id: "3",
+                subject: "Out of Office Auto-Reply",
+                sender: "manager@bigcorp.com",
+                account: "work@company.com",
+                folder: "INBOX",
+                category: "Out of Office",
+                timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+                body: "Thank you for your email. I am currently out of office and will return on Monday. For urgent matters, please contact my assistant.",
+                read: true
+            }
+        ];
+
+        // Data SDK handler
+        const dataHandler = {
+            onDataChanged(data) {
+                emails = data;
+                applyFilters();
+                updateSidebar();
+                renderEmails();
+                updateLoadingState();
+            }
+        };
+
+        // Element SDK configuration
+        const element = {
+            defaultConfig,
+            render: async (config) => {
+                document.getElementById('app-title').textContent = config.app_title || defaultConfig.app_title;
+            },
+            mapToCapabilities: (config) => ({
+                recolorables: [
+                    {
+                        get: () => config.primary_color || "#2563eb",
+                        set: (value) => {
+                            config.primary_color = value;
+                            window.elementSdk.setConfig({ primary_color: value });
+                        }
+                    }
+                ],
+                borderables: [],
+                fontEditable: {
+                    get: () => config.font_family || "Inter",
+                    set: (value) => {
+                        config.font_family = value;
+                        window.elementSdk.setConfig({ font_family: value });
+                    }
+                },
+                fontSizeable: {
+                    get: () => config.font_size || 16,
+                    set: (value) => {
+                        config.font_size = value;
+                        window.elementSdk.setConfig({ font_size: value });
+                    }
+                }
+            }),
+            mapToEditPanelValues: (config) => new Map([
+                ["app_title", config.app_title || defaultConfig.app_title],
+                ["company_name", config.company_name || defaultConfig.company_name],
+                ["meeting_link", config.meeting_link || defaultConfig.meeting_link]
+            ])
+        };
+
+        // Initialize SDKs
+        async function initializeApp() {
+            try {
+                if (window.elementSdk) {
+                    await window.elementSdk.init(element);
+                }
+                
+                if (window.dataSdk) {
+                    const result = await window.dataSdk.init(dataHandler);
+                    if (!result.isOk) {
+                        console.error("Failed to initialize data SDK");
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to initialize app:", error);
+            }
+        }
+
+        // Utility functions
+        function getCategoryColor(category) {
+            const colors = {
+                'Interested': 'bg-green-100 text-green-800',
+                'Meeting Booked': 'bg-blue-100 text-blue-800',
+                'Not Interested': 'bg-red-100 text-red-800',
+                'Spam': 'bg-gray-100 text-gray-800',
+                'Out of Office': 'bg-yellow-100 text-yellow-800'
+            };
+            return colors[category] || 'bg-gray-100 text-gray-800';
+        }
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffDays = Math.floor(diffHours / 24);
+
+            if (diffHours < 1) return 'Just now';
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            return date.toLocaleDateString();
+        }
+
+        function showNotification(message) {
+            const toast = document.getElementById('notification-toast');
+            const messageEl = document.getElementById('toast-message');
+            messageEl.textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Filter and search functions
+        function applyFilters() {
+            filteredEmails = emails.filter(email => {
+                const matchesAccount = activeFilters.account === 'all' || email.account === activeFilters.account;
+                const matchesCategory = activeFilters.category === 'all' || email.category === activeFilters.category;
+                const matchesFolder = activeFilters.folder === 'all' || email.folder === activeFilters.folder;
+                const matchesSearch = !activeFilters.search || 
+                    email.subject.toLowerCase().includes(activeFilters.search.toLowerCase()) ||
+                    email.sender.toLowerCase().includes(activeFilters.search.toLowerCase()) ||
+                    email.body.toLowerCase().includes(activeFilters.search.toLowerCase());
+                
+                return matchesAccount && matchesCategory && matchesFolder && matchesSearch;
+            });
+        }
+
+        function updateSidebar() {
+            const accounts = [...new Set(emails.map(e => e.account))];
+            const categories = [...new Set(emails.map(e => e.category))];
+            const folders = [...new Set(emails.map(e => e.folder))];
+
+            // Update accounts
+            const accountsList = document.getElementById('accounts-list');
+            accountsList.innerHTML = `
+                <button class="filter-btn w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${activeFilters.account === 'all' ? 'bg-blue-100 text-blue-700' : 'text-gray-700'}" data-filter="account" data-value="all">
+                    All Accounts (${emails.length})
+                </button>
+                ${accounts.map(account => `
+                    <button class="filter-btn w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${activeFilters.account === account ? 'bg-blue-100 text-blue-700' : 'text-gray-700'}" data-filter="account" data-value="${account}">
+                        ${account} (${emails.filter(e => e.account === account).length})
+                    </button>
+                `).join('')}
+            `;
+
+            // Update categories
+            const categoriesList = document.getElementById('categories-list');
+            categoriesList.innerHTML = `
+                <button class="filter-btn w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${activeFilters.category === 'all' ? 'bg-blue-100 text-blue-700' : 'text-gray-700'}" data-filter="category" data-value="all">
+                    All Categories (${emails.length})
+                </button>
+                ${categories.map(category => `
+                    <button class="filter-btn w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${activeFilters.category === category ? 'bg-blue-100 text-blue-700' : 'text-gray-700'}" data-filter="category" data-value="${category}">
+                        ${category} (${emails.filter(e => e.category === category).length})
+                    </button>
+                `).join('')}
+            `;
+
+            // Update folders
+            const foldersList = document.getElementById('folders-list');
+            foldersList.innerHTML = `
+                <button class="filter-btn w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${activeFilters.folder === 'all' ? 'bg-blue-100 text-blue-700' : 'text-gray-700'}" data-filter="folder" data-value="all">
+                    All Folders (${emails.length})
+                </button>
+                ${folders.map(folder => `
+                    <button class="filter-btn w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-gray-100 ${activeFilters.folder === folder ? 'bg-blue-100 text-blue-700' : 'text-gray-700'}" data-filter="folder" data-value="${folder}">
+                        ${folder} (${emails.filter(e => e.folder === folder).length})
+                    </button>
+                `).join('')}
+            `;
+        }
+
+        function renderEmails() {
+            const emailsList = document.getElementById('emails-list');
+            
+            if (filteredEmails.length === 0) {
+                emailsList.innerHTML = '';
+                return;
+            }
+
+            emailsList.innerHTML = filteredEmails.map(email => `
+                <div class="email-item bg-white rounded-lg shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-all" data-email-id="${email.id}">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center space-x-2 mb-1">
+                                <h3 class="text-sm font-medium text-gray-900 truncate">${email.subject}</h3>
+                                ${!email.read ? '<div class="w-2 h-2 bg-blue-600 rounded-full"></div>' : ''}
+                            </div>
+                            <p class="text-sm text-gray-600 truncate">From: ${email.sender}</p>
+                            <p class="text-xs text-gray-500">${email.account} • ${email.folder}</p>
+                        </div>
+                        <div class="flex flex-col items-end space-y-2">
+                            <span class="text-xs text-gray-500">${formatTimestamp(email.timestamp)}</span>
+                            <span class="category-badge px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(email.category)}">
+                                ${email.category}
+                            </span>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-700 line-clamp-2">${email.body}</p>
+                </div>
+            `).join('');
+        }
+
+        function updateLoadingState() {
+            const loadingState = document.getElementById('loading-state');
+            const emptyState = document.getElementById('empty-state');
+            const emailsList = document.getElementById('emails-list');
+
+            if (emails.length === 0) {
+                loadingState.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                emailsList.classList.add('hidden');
+            } else {
+                loadingState.classList.add('hidden');
+                emptyState.classList.add('hidden');
+                emailsList.classList.remove('hidden');
+            }
+        }
+
+        async function addSampleEmail() {
+            if (emails.length >= 999) {
+                showNotification("Maximum limit of 999 emails reached. Please delete some emails first.");
+                return;
+            }
+
+            const randomSample = sampleEmails[Math.floor(Math.random() * sampleEmails.length)];
+            const newEmail = {
+                ...randomSample,
+                id: Date.now().toString(),
+                timestamp: new Date().toISOString()
+            };
+
+            const result = await window.dataSdk.create(newEmail);
+            if (result.isOk) {
+                if (newEmail.category === 'Interested') {
+                    showNotification("New interested email! Slack notification sent & webhook triggered.");
+                } else {
+                    showNotification("Sample email added successfully!");
+                }
+            } else {
+                showNotification("Failed to add email. Please try again.");
+            }
+        }
+
+        function showEmailModal(emailId) {
+            const email = emails.find(e => e.id === emailId);
+            if (!email) return;
+
+            document.getElementById('modal-subject').textContent = email.subject;
+            document.getElementById('modal-sender').textContent = email.sender;
+            document.getElementById('modal-account').textContent = email.account;
+            document.getElementById('modal-body').textContent = email.body;
+            
+            const categoryEl = document.getElementById('modal-category');
+            categoryEl.textContent = email.category;
+            categoryEl.className = `text-sm px-2 py-1 rounded-full ${getCategoryColor(email.category)}`;
+
+            // Generate AI suggestions based on category
+            const suggestionsContainer = document.getElementById('suggestions-container');
+            let suggestions = [];
+
+            if (email.category === 'Interested') {
+                const config = window.elementSdk?.config || defaultConfig;
+                const meetingLink = config.meeting_link || defaultConfig.meeting_link;
+                suggestions = [
+                    `Thank you for your interest! I'm excited about this opportunity. You can book a meeting with me here: ${meetingLink}`,
+                    `Hi! Thanks for reaching out. I'd love to discuss this further. Here's my calendar link: ${meetingLink}`,
+                    `Great to hear from you! I'm available for a call. Please use this link to schedule: ${meetingLink}`
+                ];
+            } else if (email.category === 'Meeting Booked') {
+                suggestions = [
+                    "Perfect! I've added this to my calendar. Looking forward to our discussion.",
+                    "Thank you for booking the meeting. I'll prepare the materials we discussed.",
+                    "Great! I'll see you at the scheduled time. Please let me know if you need to reschedule."
+                ];
+            }
+
+            suggestionsContainer.innerHTML = suggestions.length > 0 ? 
+                suggestions.map(suggestion => `
+                    <div class="ai-suggestion p-3 rounded-lg text-white mb-2 cursor-pointer hover:opacity-90 transition-opacity" onclick="copyToClipboard('${suggestion.replace(/'/g, "\\'")}')">
+                        <p class="text-sm">${suggestion}</p>
+                        <p class="text-xs opacity-75 mt-1">Click to copy</p>
+                    </div>
+                `).join('') : 
+                '<p class="text-sm text-gray-600">No AI suggestions available for this email category.</p>';
+
+            document.getElementById('email-modal').classList.remove('hidden');
+
+            // Mark as read if unread
+            if (!email.read) {
+                markAsRead(emailId);
+            }
+        }
+
+        async function markAsRead(emailId) {
+            const email = emails.find(e => e.id === emailId);
+            if (email && !email.read) {
+                email.read = true;
+                const result = await window.dataSdk.update(email);
+                if (!result.isOk) {
+                    email.read = false; // Revert on failure
+                }
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showNotification("Reply suggestion copied to clipboard!");
+            });
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeApp();
+
+            // Search functionality
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                activeFilters.search = e.target.value;
+                applyFilters();
+                renderEmails();
+            });
+
+            // Filter buttons
+            document.addEventListener('click', (e) => {
+                if (e.target.classList.contains('filter-btn')) {
+                    const filterType = e.target.dataset.filter;
+                    const filterValue = e.target.dataset.value;
+                    activeFilters[filterType] = filterValue;
+                    applyFilters();
+                    renderEmails();
+                    updateSidebar();
+                }
+
+                if (e.target.classList.contains('email-item') || e.target.closest('.email-item')) {
+                    const emailItem = e.target.closest('.email-item');
+                    const emailId = emailItem.dataset.emailId;
+                    showEmailModal(emailId);
+                }
+            });
+
+            // Modal controls
+            document.getElementById('close-modal').addEventListener('click', () => {
+                document.getElementById('email-modal').classList.add('hidden');
+            });
+
+            document.getElementById('email-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'email-modal') {
+                    document.getElementById('email-modal').classList.add('hidden');
+                }
+            });
+
+            // Add sample email buttons
+            document.getElementById('add-sample-btn').addEventListener('click', addSampleEmail);
+            document.getElementById('add-first-email-btn').addEventListener('click', addSampleEmail);
+
+            // Sync button
+            document.getElementById('sync-btn').addEventListener('click', () => {
+                showNotification("Email sync initiated! Real-time IMAP connections active.");
+            });
+
+            // Initial load
+            setTimeout(() => {
+                updateLoadingState();
+            }, 1000);
+        });
+    </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'991dac67f3763d2a',t:'MTc2MTAxNzM5Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
